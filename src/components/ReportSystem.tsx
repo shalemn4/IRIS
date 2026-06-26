@@ -4,10 +4,11 @@ import { FileText, Copy, Printer, Check, Cpu, RefreshCw, AlertTriangle, ShieldCh
 
 interface ReportSystemProps {
   caseId: string;
-  activeCase: Case;
+  activeCase: Case & { notes?: any };
   caseEvents: TimelineEvent[];
   caseFindings: Finding[];
   caseEvidence: Evidence[];
+  isStaticMode?: boolean;
 }
 
 export default function ReportSystem({
@@ -16,6 +17,7 @@ export default function ReportSystem({
   caseEvents,
   caseFindings,
   caseEvidence,
+  isStaticMode,
 }: ReportSystemProps) {
   const [reportMarkdown, setReportMarkdown] = useState("");
   const [isAiGenerated, setIsAiGenerated] = useState(false);
@@ -23,10 +25,77 @@ export default function ReportSystem({
   const [copied, setCopied] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
+  const generateStaticReportMarkdown = () => {
+    if (!activeCase) return "";
+    return `# INCIDENT FORENSIC REPORT: ${activeCase.title.toUpperCase()}
+  
+## 1. EXECUTIVE SUMMARY
+**Incident Case ID:** ${activeCase.id}
+**Severity Level:** ${activeCase.severity}
+**Current Incident Status:** ${activeCase.status}
+**Report Generation Timestamp:** ${new Date().toISOString()}
+
+**Description of Incident:**
+${activeCase.description}
+
+This report compiles chronological timeline evidence and findings regarding ${activeCase.title}. Under static review, we have recorded **${caseEvents.length} system milestones** and mapped relevant indicators against the MITRE ATT&CK enterprise catalog.
+
+---
+
+## 2. KEY THREAT FINDINGS
+${caseFindings.length === 0 ? "*No automatic findings recorded.*" : caseFindings.map((f: any, idx: number) => `
+### Finding #${idx + 1}: ${f.title}
+- **Severity / Confidence:** ${f.severity} (Confidence: ${f.confidence}%)
+- **MITRE Technique:** ${f.techniqueId || "N/A"}
+- **Description:** ${f.description}
+`).join("\n")}
+
+---
+
+## 3. CHRONOLOGICAL FORENSIC TIMELINE
+The following events represent the core chronology of the compromise:
+
+${caseEvents.length === 0 ? "*No timeline events mapped yet.*" : caseEvents.map((e: any) => `
+### [${e.timestamp}] ${e.event} (${e.severity.toUpperCase()})
+- **MITRE Tactics/Techniques:** ${e.techniqueId ? `${e.techniqueId} - ${e.techniqueName}` : "N/A"}
+- **Scope / Impact:** ${e.description}
+- **Analyst Assessment:** ${e.notes || "Standard audit trail node."}
+`).join("\n")}
+
+---
+
+## 4. SECURE EVIDENCE SUMMARY
+Forensic assets preserved and locked:
+${caseEvidence.length === 0 ? "*No file attachments registered in S3 lockers.*" : caseEvidence.map((ev: any) => `
+- **File Asset:** ${ev.title} (\`${ev.fileUrl}\`)
+  - *Type:* ${ev.type}
+  - *Size:* ${ev.size}
+  - *Registered:* ${ev.uploadedAt}
+  - *Tag:* ${ev.tag}
+`).join("\n")}
+
+---
+
+## 5. ANALYST ACTION NOTES
+${activeCase.notes?.content || "*No raw operational notes written by analysts.*"}
+
+---
+*Report compiled securely on ${new Date().toLocaleDateString()}.*
+`;
+  };
+
   const handleGenerateReport = async () => {
     setLoading(true);
     setErrorMsg("");
     try {
+      if (isStaticMode) {
+        const markdown = generateStaticReportMarkdown();
+        setReportMarkdown(markdown);
+        setIsAiGenerated(false);
+        setLoading(false);
+        return;
+      }
+
       const res = await fetch("/api/report/generate", {
         method: "POST",
         headers: {
@@ -43,8 +112,10 @@ export default function ReportSystem({
       setReportMarkdown(data.report);
       setIsAiGenerated(data.isAiGenerated);
     } catch (err: any) {
-      setErrorMsg("Failed to connect to the automatic intelligence summary builder. Please verify backend connection status.");
-      console.error(err);
+      console.warn("Backend report generation failed, falling back to local template", err);
+      const markdown = generateStaticReportMarkdown();
+      setReportMarkdown(markdown);
+      setIsAiGenerated(false);
     } finally {
       setLoading(false);
     }
