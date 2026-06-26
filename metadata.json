@@ -1,0 +1,6 @@
+{
+  "name": "Incident Response Investigation Studio",
+  "description": "A modern incident response studio that helps security analysts parse logs, visualize attack chains, manage evidence, and generate summary reports with AI assistance.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
